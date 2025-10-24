@@ -5,8 +5,11 @@ const puppeteer = require('puppeteer');
 const MENU_URL = "https://www.ripleycsd.org/dining";
 const OUTPUT_FILE = path.join(__dirname, 'lunch.json');
 
-// This is the element we will wait for
-const MENU_ITEM_SELECTOR = '.district-menu-item-name';
+// --- THIS IS THE CHANGE ---
+// We will wait for the date header (e.g., "Monday, Oct 20") to appear.
+// This should always be present, even if there's no menu.
+const DATE_HEADER_SELECTOR = '.district-menu-v-2-menu-day-v-28cb4ed5';
+// --- END CHANGE ---
 
 async function updateLunchData() {
     console.log("Launching headless browser...");
@@ -18,7 +21,6 @@ async function updateLunchData() {
         // Launch the browser
         browser = await puppeteer.launch({
             headless: true,
-            // This flag is often needed in GitHub Actions
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         
@@ -28,15 +30,16 @@ async function updateLunchData() {
         console.log(`Navigating to ${MENU_URL}...`);
         await page.goto(MENU_URL, { waitUntil: 'networkidle2' });
 
-        // 2. Wait for the JavaScript to load the menu
-        console.log(`Waiting for menu selector: ${MENU_ITEM_SELECTOR}`);
-        await page.waitForSelector(MENU_ITEM_SELECTOR, { timeout: 15000 });
+        // 2. Wait for the JavaScript to load the menu headers
+        console.log(`Waiting for selector: ${DATE_HEADER_SELECTOR}`);
+        // We now wait for the new, more reliable selector
+        await page.waitForSelector(DATE_HEADER_SELECTOR, { timeout: 15000 });
 
-        console.log("Menu has loaded! Scraping page content...");
+        console.log("Menu page has loaded! Scraping page content...");
         // 3. Get the fully-loaded HTML
         const pageText = await page.content();
         
-        // --- This is our original scraping logic, but on the *loaded* HTML ---
+        // --- This is our scraping logic ---
         const today = new Date();
         displayDate = today.toLocaleString('en-US', {
             weekday: 'long',
@@ -80,7 +83,7 @@ async function updateLunchData() {
         } else {
             console.log("Could not find today's date on the menu page.");
         }
-        // --- End original scraping logic ---
+        // --- End scraping logic ---
 
     } catch (error) {
         console.error("Error during puppeteer scrape:", error.message);
