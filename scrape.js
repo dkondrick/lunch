@@ -1,67 +1,95 @@
-const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
+const puppeteer = require('puppeteer');
 
-const API_URL = "https://api.apptegy.net/sites/1155/district_menus";
+const MENU_URL = "https://www.ripleycsd.org/dining";
 const OUTPUT_FILE = path.join(__dirname, 'lunch.json');
 
-// Helper function to get today's date in YYYY-MM-DD format
-function getApiDate() {
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-}
+// This is the element we will wait for
+const MENU_ITEM_SELECTOR = '.district-menu-item-name';
 
 async function updateLunchData() {
-    console.log("Fetching menu from API...");
-    let lunchMenu = "Menu not found for today."; // Default message
-    
-    const today = new Date();
-    const displayDate = today.toLocaleString('en-US', {
-        weekday: 'long',
-        month: 'short',
-        day: 'numeric'
-    });
-    const apiDate = getApiDate();
+    console.log("Launching headless browser...");
+    let lunchMenu = "Menu not found for today.";
+    let displayDate = "";
+    let browser = null;
 
     try {
-        // 1. Call the API with all the headers
-        const response = await axios.get(API_URL, {
-            params: {
-                date: apiDate,
-                end_date: apiDate
-            },
-            // --- UPDATED HEADERS ---
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.82 Safari/537.36',
-                // This is the new, important line:
-                'Referer': 'https://www.ripleycsd.org/'
-            }
-            // --- END UPDATED HEADERS ---
+        // Launch the browser
+        browser = await puppeteer.launch({
+            headless: true,
+            // This flag is often needed in GitHub Actions
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        
+        const page = await browser.newPage();
+
+        // 1. Go to the dining page
+        console.log(`Navigating to ${MENU_URL}...`);
+        await page.goto(MENU_URL, { waitUntil: 'networkidle2' });
+
+        // 2. Wait for the JavaScript to load the menu
+        console.log(`Waiting for menu selector: ${MENU_ITEM_SELECTOR}`);
+        await page.waitForSelector(MENU_ITEM_SELECTOR, { timeout: 15000 });
+
+        console.log("Menu has loaded! Scraping page content...");
+        // 3. Get the fully-loaded HTML
+        const pageText = await page.content();
+        
+        // --- This is our original scraping logic, but on the *loaded* HTML ---
+        const today = new Date();
+        displayDate = today.toLocaleString('en-US', {
+            weekday: 'long',
+            month: 'short',
+            day: 'numeric'
         });
 
-        // 2. Parse the JSON response
-        const menus = response.data.data.district_menus;
+        const monthStr = today.toLocaleDateString('en-US', { month: 'short' });
+        const dayStr = today.toLocaleDateString('en-US', { day: 'numeric' });
+        const dateRegex = new RegExp(`${monthStr}[^\\w]${dayStr}`, "i");
+        
+        const dateMatch = pageText.match(dateRegex);
 
-        if (menus && menus.length > 0) {
-            const allItems = menus[0].menu_day_items;
-            const lunchItem = allItems.find(item => item.category === "Lunch");
+        if (dateMatch) {
+            console.log("Found today's date!");
+            const textAfterDate = pageText.substring(dateMatch.index);
 
-            if (lunchItem && lunchItem.name) {
-                lunchMenu = lunchItem.name.trim();
-                console.log(`Found menu: ${lunchMenu}`);
+            // Find "Lunch" (case-insensitive)
+            const lunchHeaderRegex = /Lunch/i;
+            const lunchHeaderMatch = textAfterDate.match(lunchHeaderRegex);
+
+            if (lunchHeaderMatch) {
+                console.log("Found 'Lunch' header.");
+                const textAfterLunch = textAfterDate.substring(lunchHeaderMatch.index + lunchHeaderMatch[0].length);
+
+                // Find the *first* menu item name after "Lunch"
+                const firstLineRegex = /<div[^>]*class="[^"]*district-menu-item-name[^"]*"[^>]*>([^<]+)<\/div>/im;
+                const menuMatch = textAfterLunch.match(firstLineRegex);
+
+                if (menuMatch && menuMatch[1]) {
+                    lunchMenu = menuMatch[1].trim().replace(/&amp;/g, '&'); // Clean up &
+                    console.log(`Found menu: ${lunchMenu}`);
+                } else {
+                    console.log("Found 'Lunch' but couldn't find menu items after it.");
+                    lunchMenu = "Menu items not found after 'Lunch' header.";
+                }
             } else {
-                console.log("API returned data, but no 'Lunch' category was found.");
-                lunchMenu = "Lunch not posted for today.";
+                console.log("Found date, but no 'Lunch' header after it.");
+                lunchMenu = "Lunch header not found for today.";
             }
         } else {
-            console.log("No menu data returned from API for today.");
+            console.log("Could not find today's date on the menu page.");
         }
+        // --- End original scraping logic ---
+
     } catch (error) {
-        console.error("Error fetching from API:", error.message);
-        lunchMenu = "Error: Could not contact school menu API.";
+        console.error("Error during puppeteer scrape:", error.message);
+        lunchMenu = "Error: Could not scrape the menu page.";
+    } finally {
+        // Always close the browser
+        if (browser) {
+            await browser.close();
+        }
     }
 
     // Create the JSON object to save
