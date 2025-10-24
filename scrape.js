@@ -27,17 +27,19 @@ async function updateLunchData() {
     const apiDate = getApiDate();
 
     try {
-        // 1. Call the API with today's date and a User-Agent header
+        // 1. Call the API with all the headers
         const response = await axios.get(API_URL, {
             params: {
                 date: apiDate,
                 end_date: apiDate
             },
-            // --- THIS IS THE NEW, IMPORTANT PART ---
+            // --- UPDATED HEADERS ---
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.82 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.82 Safari/537.36',
+                // This is the new, important line:
+                'Referer': 'https://www.ripleycsd.org/'
             }
-            // --- END NEW PART ---
+            // --- END UPDATED HEADERS ---
         });
 
         // 2. Parse the JSON response
