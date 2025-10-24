@@ -2,69 +2,65 @@ const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
 
-const MENU_URL = "https://www.ripleycsd.org/dining";
+// This is the new API endpoint
+const API_URL = "https://api.apptegy.net/sites/1155/district_menus";
 const OUTPUT_FILE = path.join(__dirname, 'lunch.json');
 
+// Helper function to get today's date in YYYY-MM-DD format
+function getApiDate() {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    // Month is 0-indexed, so add 1 and pad with '0'
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
 async function updateLunchData() {
-    console.log(`Fetching menu from ${MENU_URL}...`);
+    console.log("Fetching menu from API...");
     let lunchMenu = "Menu not found for today."; // Default message
-    let displayDate = "";
+    
+    const today = new Date();
+    const displayDate = today.toLocaleString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric'
+    });
+    const apiDate = getApiDate();
 
     try {
-        const response = await axios.get(MENU_URL);
-        const pageText = response.data.replace(/&nbsp;/g, " ");
-
-        const today = new Date();
-        displayDate = today.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'short',
-            day: 'numeric'
+        // 1. Call the API with today's date
+        const response = await axios.get(API_URL, {
+            params: {
+                date: apiDate,
+                end_date: apiDate
+            }
         });
 
-        // Use the flexible regex for the date
-        const monthStr = today.toLocaleDateString('en-US', { month: 'short' });
-        const dayStr = today.toLocaleDateString('en-US', { day: 'numeric' });
-        const dateRegex = new RegExp(`${monthStr}[^\\w]${dayStr}`, "i");
-        
-        const dateMatch = pageText.match(dateRegex);
+        // 2. Parse the JSON response
+        const menus = response.data.data.district_menus;
 
-        if (dateMatch) {
-            console.log("Found a match for today's date!");
-            // Get all text *after* the date
-            const textAfterDate = pageText.substring(dateMatch.index);
+        if (menus && menus.length > 0) {
+            // Get all items for the first menu of the day
+            const allItems = menus[0].menu_day_items;
+            
+            // 3. Find the item where the category is "Lunch"
+            const lunchItem = allItems.find(item => item.category === "Lunch");
 
-            // 1. Find the "Lunch" header (case-insensitive)
-            const lunchHeaderRegex = /Lunch/i;
-            const lunchHeaderMatch = textAfterDate.match(lunchHeaderRegex);
-
-            if (lunchHeaderMatch) {
-                console.log("Found 'Lunch' header.");
-                // 2. Get all text *after* the word "Lunch"
-                const textAfterLunch = textAfterDate.substring(lunchHeaderMatch.index + lunchHeaderMatch[0].length);
-
-                // 3. Find the *first* meaningful line of text after "Lunch"
-                // This regex skips whitespace and HTML tags to find the first piece of text
-                const firstLineRegex = /^\s*(<[^>]+>)*\s*([^<>\n]+)/m;
-                const menuMatch = textAfterLunch.match(firstLineRegex);
-
-                if (menuMatch && menuMatch[2]) {
-                    // menuMatch[2] is our captured text!
-                    lunchMenu = menuMatch[2].trim();
-                    console.log(`Found menu: ${lunchMenu}`);
-                } else {
-                    console.log("Found 'Lunch' but couldn't find menu items after it.");
-                    lunchMenu = "Menu items not found after 'Lunch' header.";
-                }
+            if (lunchItem && lunchItem.name) {
+                // 4. Success! We found the lunch menu.
+                lunchMenu = lunchItem.name.trim();
+                console.log(`Found menu: ${lunchMenu}`);
             } else {
-                console.log("Found date, but no 'Lunch' header after it.");
-                lunchMenu = "Lunch header not found for today.";
+                console.log("API returned data, but no 'Lunch' category was found.");
+                lunchMenu = "Lunch not posted for today.";
             }
         } else {
-            console.log("Could not find today's date on the menu page.");
+            console.log("No menu data returned from API for today.");
         }
     } catch (error) {
-        console.error("Error fetching or parsing menu:", error.message);
-        lunchMenu = "Error: Could not fetch menu from school website.";
+        console.error("Error fetching from API:", error.message);
+        lunchMenu = "Error: Could not contact school menu API.";
     }
 
     // Create the JSON object to save
