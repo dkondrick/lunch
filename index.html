@@ -1,1 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Today's Lunch</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: grid;
+            place-items: center;
+            min-height: 90vh;
+            background-color: #f4f4f9;
+        }
+        #menu-container {
+            background: #ffffff;
+            padding: 2rem 3rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #005a9c; /* School color (approx) */
+            padding-bottom: 0.5rem;
+            margin-top: 0;
+        }
+        #lunch-display {
+            font-size: 1.5rem;
+            color: #555;
+            min-height: 50px;
+        }
+    </style>
+</head>
+<body>
 
+    <div id="menu-container">
+        <h1>Today's Lunch</h1>
+        <div id="lunch-display">
+            Loading...
+        </div>
+    </div>
+
+    <script>
+        // This function runs when the page loads
+        async function fetchLunch() {
+            try {
+                // Fetch the data from our *own* server's /get-lunch endpoint
+                const response = await fetch('/get-lunch');
+                const data = await response.json();
+                
+                // Find the div and update its text
+                const display = document.getElementById('lunch-display');
+                display.textContent = data.lunch_menu;
+                
+            } catch (error) {
+                // Show an error if the server is not running or fails
+                const display = document.getElementById('lunch-display');
+                display.textContent = "Could not load menu. Is the server running?";
+                console.error('Error fetching lunch:', error);
+            }
+        }
+
+        // Run the function
+        fetchLunch();
+    </script>
+
+</body>
+</html>
