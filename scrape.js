@@ -1,102 +1,92 @@
+const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
-const puppeteer = require('puppeteer');
 
-const MENU_URL = "https://www.ripleycsd.org/dining";
+const API_URL = "https://api.apptegy.net/sites/1155/district_menus";
 const OUTPUT_FILE = path.join(__dirname, 'lunch.json');
 
-// This is a reliable selector for the whole menu block
-const MENU_CONTAINER_SELECTOR = '.district-menu-v-2-container';
+// --- THIS IS THE CRITICAL FIX ---
+// Gets the current date formatted as YYYY-MM-DD for the
+// "America/New_York" timezone, regardless of where the server is.
+function getApiDate() {
+    const today = new Date();
+    // Options to get parts of the date in the correct timezone
+    const options = {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    };
+    
+    // Format the date (e.g., "10/28/2025")
+    const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(today);
+    
+    // Reassemble into YYYY-MM-DD
+    const dateParts = {};
+    parts.forEach(p => dateParts[p.type] = p.value);
+    
+    return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+}
+// --- END FIX ---
 
 async function updateLunchData() {
-    console.log("Launching headless browser...");
-    let lunchMenu = "Menu not found for today.";
-    let displayDate = "";
-    let browser = null;
-
-    // Get today's date info
-    const today = new Date();
-    displayDate = today.toLocaleString('en-US', {
+    console.log("Fetching menu from API...");
+    let lunchMenu = "Menu not found for today."; // Default message
+    
+    // Get the display date (also in the correct timezone)
+    const displayDate = new Date().toLocaleString('en-US', {
+        timeZone: 'America/New_York',
         weekday: 'long',
         month: 'short',
         day: 'numeric'
     });
-    // We need these to find the right section
-    const monthStr = today.toLocaleDateString('en-US', { month: 'short' }); // e.g., "Oct"
-    const dayStr = today.toLocaleDateString('en-US', { day: 'numeric' });   // e.g., "24"
+    
+    const apiDate = getApiDate();
+    console.log(`Requesting menu for date: ${apiDate} (New York Time)`);
 
     try {
-        browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        
-        const page = await browser.newPage();
-
-        console.log(`Navigating to ${MENU_URL}...`);
-        await page.goto(MENU_URL);
-
-        // 1. Wait for the main menu container to exist
-        console.log(`Waiting for selector: ${MENU_CONTAINER_SELECTOR}`);
-        await page.waitForSelector(MENU_CONTAINER_SELECTOR, { timeout: 15000 });
-        console.log("Menu container loaded!");
-
-        // 2. Run JavaScript inside the loaded page to find the menu
-        const menuText = await page.evaluate((month, day) => {
-            // Find all the "day" blocks on the page
-            const dayBlocks = document.querySelectorAll('.district-menu-v-2-menu-day');
-            
-            for (const block of dayBlocks) {
-                // Find the date header for this block
-                const dateTitle = block.querySelector('h2.district-menu-v-2-menu-day-title');
-                
-                // Check if the date header exists and matches today
-                if (dateTitle && dateTitle.innerText.includes(month) && dateTitle.innerText.includes(day)) {
-                    // This is today's block! Now find the "Lunch" category
-                    const categoryBlocks = block.querySelectorAll('.district-menu-v-2-category');
-                    
-                    for (const cat of categoryBlocks) {
-                        const catTitle = cat.querySelector('h3.district-menu-v-2-category-title');
-                        
-                        // Check if this category is "Lunch"
-                        if (catTitle && catTitle.innerText.trim().toLowerCase() === 'lunch') {
-                            // This is the "Lunch" block! Get the first menu item
-                            const menuItem = cat.querySelector('.district-menu-item-name');
-                            if (menuItem) {
-                                return menuItem.innerText.trim(); // Success!
-                            }
-                        }
-                    }
-                }
+        // 1. Call the API with the correct date and headers
+        const response = await axios.get(API_URL, {
+            params: {
+                date: apiDate,
+                end_date: apiDate
+            },
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.82 Safari/537.36',
+                'Referer': 'https://www.ripleycsd.org/'
             }
-            return null; // No match found
-        }, monthStr, dayStr); // Pass our date strings into the function
+        });
 
-        // 3. Check the result
-        if (menuText) {
-            lunchMenu = menuText.replace(/&amp;/g, '&'); // Clean up text
-            console.log(`Found menu: ${lunchMenu}`);
+        // 2. Parse the JSON response
+        const menus = response.data.data.district_menus;
+
+        if (menus && menus.length > 0) {
+            const allItems = menus[0].menu_day_items;
+            const lunchItem = allItems.find(item => item.category === "Lunch");
+
+            if (lunchItem && lunchItem.name) {
+                lunchMenu = lunchItem.name.trim();
+                console.log(`Found menu: ${lunchMenu}`);
+            } else {
+                console.log("API returned data, but no 'Lunch' category was found.");
+                lunchMenu = "Lunch not posted for today.";
+            }
         } else {
-            console.log("Scrape complete, but no matching menu item was found.");
+            console.log("No menu data returned from API for this date.");
         }
-
     } catch (error) {
-        console.error("Error during puppeteer scrape:", error.message);
-        lunchMenu = "Error: Could not scrape the menu page.";
-    } finally {
-        if (browser) {
-            await browser.close();
-            console.log("Browser closed.");
-        }
+        console.error("Error fetching from API:", error.message);
+        lunchMenu = "Error: Could not contact school menu API.";
     }
 
-    // Write the result to the JSON file
+    // Create the JSON object to save
     const data = {
         date: displayDate,
         menu: lunchMenu,
         lastUpdated: new Date().toISOString()
     };
 
+    // Write the data to lunch.json
     try {
         await fs.writeFile(OUTPUT_FILE, JSON.stringify(data, null, 2));
         console.log(`Success! ${OUTPUT_FILE} has been created.`);
