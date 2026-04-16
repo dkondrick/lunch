@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Math Facts</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #f0f0fa;
+      padding: 1rem;
+    }
+
+    /* ── Screens ─────────────────────────────────────────── */
+    .screen {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* ── Card ────────────────────────────────────────────── */
+    .card {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+      overflow: hidden;
+      transition: box-shadow 0.15s ease;
+    }
+
+    .card.flash-correct {
+      box-shadow: 0 0 0 4px #22c55e, 0 8px 30px rgba(0, 0, 0, 0.12);
+    }
+
+    .card.flash-wrong {
+      box-shadow: 0 0 0 4px #ef4444, 0 8px 30px rgba(0, 0, 0, 0.12);
+    }
+
+    /* ── Header Band ─────────────────────────────────────── */
+    .header-band {
+      background: linear-gradient(135deg, #5c35d4 0%, #3b1fa8 100%);
+      padding: 1.5rem 2rem;
+      text-align: center;
+      color: white;
+    }
+
+    .game-title {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: white;
+    }
+
+    .subtitle {
+      font-size: 1rem;
+      color: rgba(255, 255, 255, 0.8);
+      margin-top: 0.25rem;
+    }
+
+    /* ── HUD ─────────────────────────────────────────────── */
+    .hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    .lives {
+      font-size: 1.4rem;
+      letter-spacing: 2px;
+      min-width: 5ch; /* stable width regardless of hearts remaining */
+    }
+
+    .score-area,
+    .streak-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 4rem;
+    }
+
+    .score-label,
+    .streak-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .score-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #ffd700;
+    }
+
+    .streak-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    /* ── Card Body ───────────────────────────────────────── */
+    .card-body {
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+    }
+
+    /* ── Instructions ────────────────────────────────────── */
+    .instructions {
+      font-size: 0.95rem;
+      color: #555;
+      text-align: center;
+      line-height: 1.6;
+      max-width: 320px;
+    }
+
+    /* ── High Score display ──────────────────────────────── */
+    .high-score-display {
+      font-size: 1rem;
+      color: #555;
+      background: #f5f5ff;
+      padding: 0.4rem 1.25rem;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
+
+    /* ── Question ────────────────────────────────────────── */
+    .question {
+      font-size: 3.75rem;
+      font-weight: 700;
+      color: #2d2d2d;
+      letter-spacing: -0.02em;
+      text-align: center;
+      min-height: 5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @keyframes pulse-correct {
+      0%   { transform: scale(1);    color: #2d2d2d; }
+      50%  { transform: scale(1.08); color: #16a34a; }
+      100% { transform: scale(1);    color: #2d2d2d; }
+    }
+
+    @keyframes shake-wrong {
+      0%, 100% { transform: translateX(0); }
+      20%       { transform: translateX(-9px); }
+      40%       { transform: translateX(9px); }
+      60%       { transform: translateX(-6px); }
+      80%       { transform: translateX(6px); }
+    }
+
+    .question.anim-correct {
+      animation: pulse-correct 0.35s ease;
+    }
+
+    .question.anim-wrong {
+      animation: shake-wrong 0.4s ease;
+    }
+
+    /* ── Feedback strip ──────────────────────────────────── */
+    .feedback {
+      font-size: 1.05rem;
+      font-weight: 600;
+      text-align: center;
+      padding: 0.5rem 1.25rem;
+      border-radius: 8px;
+      min-height: 2.5rem;
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .feedback.correct {
+      background: #d4f5e2;
+      color: #15803d;
+    }
+
+    .feedback.wrong {
+      background: #fde8e8;
+      color: #b91c1c;
+    }
+
+    /* ── Input row ───────────────────────────────────────── */
+    .input-row {
+      display: flex;
+      gap: 0.75rem;
+      width: 100%;
+      max-width: 320px;
+    }
+
+    .answer-input {
+      flex: 1;
+      font-size: 2rem;
+      font-weight: 600;
+      text-align: center;
+      padding: 0.4rem 0.5rem;
+      border: 3px solid #ccc;
+      border-radius: 10px;
+      outline: none;
+      transition: border-color 0.2s;
+      /* hide browser number spinners */
+      -moz-appearance: textfield;
+    }
+
+    .answer-input::-webkit-outer-spin-button,
+    .answer-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .answer-input:focus {
+      border-color: #5c35d4;
+    }
+
+    /* ── Buttons ─────────────────────────────────────────── */
+    .btn {
+      padding: 0.75rem 1.5rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #5c35d4, #3b1fa8);
+      color: white;
+      box-shadow: 0 4px 12px rgba(92, 53, 212, 0.35);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 6px 16px rgba(92, 53, 212, 0.5);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-full {
+      width: 100%;
+      max-width: 320px;
+      padding: 0.9rem;
+      font-size: 1.2rem;
+    }
+
+    /* ── Milestone banner ────────────────────────────────── */
+    .milestone-banner {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: white;
+      font-size: 1.15rem;
+      font-weight: 700;
+      padding: 0.6rem 1.5rem;
+      border-radius: 999px;
+      text-align: center;
+      animation: banner-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes banner-pop {
+      from { transform: scale(0.5); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+
+    /* ── Game Over screen ────────────────────────────────── */
+    .gameover-title {
+      font-size: 2rem;
+      font-weight: 800;
+      color: white;
+    }
+
+    .final-score-label {
+      font-size: 1rem;
+      color: #555;
+      text-align: center;
+    }
+
+    .final-score-number {
+      font-size: 4.5rem;
+      font-weight: 800;
+      color: #5c35d4;
+      line-height: 1;
+    }
+
+    .badge-new {
+      background: #ffd700;
+      color: #3b1fa8;
+      font-size: 1.1rem;
+      font-weight: 800;
+      padding: 0.4rem 1.4rem;
+      border-radius: 999px;
+      animation: banner-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .encourage-msg {
+      font-size: 0.95rem;
+      color: #666;
+      text-align: center;
+      max-width: 280px;
+      line-height: 1.5;
+    }
+
+    /* ── Mobile ──────────────────────────────────────────── */
+    @media (max-width: 360px) {
+      .question    { font-size: 3rem; }
+      .card-body   { padding: 1.25rem; }
+      .game-title  { font-size: 2rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══ SCREEN 1: Start ══════════════════════════════════════ -->
+  <div id="screen-start" class="screen">
+    <div class="card">
+      <div class="header-band">
+        <h1 class="game-title">Math Facts</h1>
+        <p class="subtitle">How far can you go?</p>
+      </div>
+      <div class="card-body">
+        <p class="instructions">
+          Answer as many math facts as you can.<br>
+          You have <strong>3 lives</strong> — one lost for each wrong answer.<br>
+          All four operations: + &nbsp; − &nbsp; × &nbsp; ÷
+        </p>
+        <div class="high-score-display">
+          Best score: <strong id="start-high-score">0</strong>
+        </div>
+        <button id="btn-start" class="btn btn-primary btn-full">Start Game</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SCREEN 2: Game ════════════════════════════════════════ -->
+  <div id="screen-game" class="screen hidden">
+    <div class="card">
+      <div class="header-band">
+        <div class="hud">
+          <div class="lives" id="lives-display">❤️❤️❤️</div>
+          <div class="score-area">
+            <span class="score-label">Score</span>
+            <span class="score-value" id="score-display">0</span>
+          </div>
+          <div class="streak-area">
+            <span class="streak-label">Streak</span>
+            <span class="streak-value" id="streak-display">0</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="milestone-banner" class="milestone-banner hidden">🔥 10 Correct!</div>
+        <div id="question-display" class="question">__ + __ = ?</div>
+        <div id="feedback-display" class="feedback hidden"></div>
+        <div class="input-row">
+          <input
+            id="answer-input"
+            type="number"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="?"
+            class="answer-input"
+          >
+          <button id="btn-submit" class="btn btn-primary">Go</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SCREEN 3: Game Over ══════════════════════════════════ -->
+  <div id="screen-gameover" class="screen hidden">
+    <div class="card">
+      <div class="header-band">
+        <h2 class="gameover-title">Game Over!</h2>
+      </div>
+      <div class="card-body">
+        <p class="final-score-label">You answered</p>
+        <p id="final-score-display" class="final-score-number">0</p>
+        <p class="final-score-label">correct!</p>
+        <div id="new-high-score-badge" class="badge-new hidden">⭐ New Best!</div>
+        <div class="high-score-display">
+          Best score: <strong id="gameover-high-score">0</strong>
+        </div>
+        <p id="encourage-msg" class="encourage-msg"></p>
+        <button id="btn-play-again" class="btn btn-primary btn-full">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ── Constants ─────────────────────────────────────────── */
+    const LIVES_MAX   = 3;
+    const MILESTONES  = [10, 25, 50];
+    const MILESTONE_MSGS = {
+      10: '🔥 10 Correct! Keep going!',
+      25: '⚡ 25 Correct! Amazing!',
+      50: '🏆 50 Correct! Math Star!'
+    };
+    const ENCOURAGE_MSGS = [
+      'Great effort — keep those facts sharp!',
+      "Every practice makes you faster!",
+      "Nice work! Try to beat your best score!",
+      "You're getting stronger every game!",
+      "Math facts for the win!"
+    ];
+    const LS_KEY = 'mathFactsHighScore_v1';
+
+    /* ── State ─────────────────────────────────────────────── */
+    let state = {
+      lives:           LIVES_MAX,
+      score:           0,
+      streak:          0,
+      highScore:       0,
+      currentQuestion: null,  // { text, answer }
+      locked:          false  // true during wrong-answer feedback delay
+    };
+
+    /* ── localStorage helpers ──────────────────────────────── */
+    function loadHighScore() {
+      const stored = localStorage.getItem(LS_KEY);
+      const parsed = parseInt(stored, 10);
+      state.highScore = isNaN(parsed) ? 0 : parsed;
+    }
+
+    function saveHighScore(score) {
+      localStorage.setItem(LS_KEY, String(score));
+    }
+
+    /* ── Question generation ───────────────────────────────── */
+    function randInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateQuestion() {
+      const ops = ['+', '-', '\u00d7', '\u00f7'];
+      const op  = ops[Math.floor(Math.random() * 4)];
+      let a, b, answer, text;
+
+      switch (op) {
+        case '+':
+          a      = randInt(1, 12);
+          b      = randInt(1, 12);
+          answer = a + b;
+          text   = `${a} + ${b} = ?`;
+          break;
+
+        case '-':
+          // derive backwards: pick subtrahend and result, compute minuend
+          b      = randInt(1, 12);
+          answer = randInt(1, 12);
+          a      = b + answer;       // always positive, never 0
+          text   = `${a} \u2212 ${b} = ?`;   // U+2212 true minus sign
+          break;
+
+        case '\u00d7':
+          a      = randInt(0, 12);
+          b      = randInt(0, 12);
+          answer = a * b;
+          text   = `${a} \u00d7 ${b} = ?`;
+          break;
+
+        case '\u00f7':
+          // derive backwards: never divide by 0, never have remainder
+          b      = randInt(1, 12);
+          answer = randInt(1, 12);
+          a      = b * answer;
+          text   = `${a} \u00f7 ${b} = ?`;
+          break;
+      }
+
+      return { text, answer };
+    }
+
+    /* ── UI update ─────────────────────────────────────────── */
+    function updateUI() {
+      // Hearts: filled + empty to keep width stable
+      const filled = '❤️'.repeat(state.lives);
+      const empty  = '🖤'.repeat(LIVES_MAX - state.lives);
+      document.getElementById('lives-display').textContent = filled + empty;
+
+      document.getElementById('score-display').textContent  = state.score;
+      document.getElementById('streak-display').textContent = state.streak;
+
+      if (state.currentQuestion) {
+        document.getElementById('question-display').textContent =
+          state.currentQuestion.text;
+      }
+    }
+
+    /* ── Milestone check ───────────────────────────────────── */
+    function checkMilestone() {
+      if (!MILESTONES.includes(state.score)) return;
+      const banner = document.getElementById('milestone-banner');
+      banner.textContent = MILESTONE_MSGS[state.score];
+      banner.classList.remove('hidden');
+      setTimeout(() => banner.classList.add('hidden'), 2200);
+    }
+
+    /* ── Visual feedback ───────────────────────────────────── */
+    function showFeedback(isCorrect) {
+      const questionEl = document.getElementById('question-display');
+      const feedbackEl = document.getElementById('feedback-display');
+      const cardEl     = document.querySelector('#screen-game .card');
+      const inputEl    = document.getElementById('answer-input');
+      const submitBtn  = document.getElementById('btn-submit');
+
+      // Remove previous animation classes and force reflow so they can replay
+      questionEl.classList.remove('anim-correct', 'anim-wrong');
+      cardEl.classList.remove('flash-correct', 'flash-wrong');
+      void questionEl.offsetWidth; // trigger reflow
+
+      if (isCorrect) {
+        questionEl.classList.add('anim-correct');
+        cardEl.classList.add('flash-correct');
+
+        feedbackEl.className = 'feedback correct';
+        feedbackEl.textContent = '✓ Correct!';
+
+        setTimeout(() => {
+          feedbackEl.className = 'feedback hidden';
+          cardEl.classList.remove('flash-correct');
+          nextQuestion();
+        }, 600);
+
+      } else {
+        state.locked    = true;
+        submitBtn.disabled = true;
+        inputEl.disabled   = true;
+
+        questionEl.classList.add('anim-wrong');
+        cardEl.classList.add('flash-wrong');
+
+        feedbackEl.className = 'feedback wrong';
+        feedbackEl.textContent =
+          `✗ The answer is ${state.currentQuestion.answer}`;
+
+        setTimeout(() => {
+          feedbackEl.className = 'feedback hidden';
+          cardEl.classList.remove('flash-wrong');
+          state.locked       = false;
+          submitBtn.disabled = false;
+          inputEl.disabled   = false;
+
+          if (state.lives <= 0) {
+            showGameOver();
+          } else {
+            nextQuestion();
+          }
+        }, 1500);
+      }
+    }
+
+    /* ── Check answer ──────────────────────────────────────── */
+    function checkAnswer() {
+      if (state.locked) return;
+
+      const inputEl = document.getElementById('answer-input');
+      const raw = inputEl.value.trim();
+
+      // Reject empty or non-numeric input
+      if (raw === '' || isNaN(raw)) {
+        inputEl.focus();
+        return;
+      }
+
+      const userAnswer = parseInt(raw, 10);
+      inputEl.value = '';
+
+      if (userAnswer === state.currentQuestion.answer) {
+        state.score++;
+        state.streak++;
+        updateUI();
+        checkMilestone();
+        showFeedback(true);
+      } else {
+        state.lives--;
+        state.streak = 0;
+        updateUI();
+        showFeedback(false);
+      }
+    }
+
+    /* ── Next question ─────────────────────────────────────── */
+    function nextQuestion() {
+      state.currentQuestion = generateQuestion();
+      updateUI();
+      const inputEl = document.getElementById('answer-input');
+      inputEl.value = '';
+      inputEl.focus();
+    }
+
+    /* ── Screen navigation ─────────────────────────────────── */
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    function startGame() {
+      state.lives           = LIVES_MAX;
+      state.score           = 0;
+      state.streak          = 0;
+      state.locked          = false;
+      state.currentQuestion = null;
+
+      // Reset any leftover UI from a previous game
+      document.getElementById('feedback-display').className = 'feedback hidden';
+      document.getElementById('milestone-banner').classList.add('hidden');
+      document.querySelector('#screen-game .card').classList.remove('flash-correct', 'flash-wrong');
+      document.getElementById('btn-submit').disabled = false;
+      document.getElementById('answer-input').disabled = false;
+
+      showScreen('screen-game');
+      nextQuestion();
+    }
+
+    function showGameOver() {
+      document.getElementById('final-score-display').textContent = state.score;
+
+      const isNewHigh = state.score > state.highScore;
+      if (isNewHigh) {
+        state.highScore = state.score;
+        saveHighScore(state.highScore);
+      }
+
+      document.getElementById('new-high-score-badge')
+        .classList.toggle('hidden', !isNewHigh);
+      document.getElementById('gameover-high-score').textContent = state.highScore;
+
+      const msg = ENCOURAGE_MSGS[state.score % ENCOURAGE_MSGS.length];
+      document.getElementById('encourage-msg').textContent = msg;
+
+      showScreen('screen-gameover');
+    }
+
+    /* ── Bootstrap ─────────────────────────────────────────── */
+    document.addEventListener('DOMContentLoaded', () => {
+      loadHighScore();
+      document.getElementById('start-high-score').textContent = state.highScore;
+
+      /* Button clicks */
+      document.getElementById('btn-start')
+        .addEventListener('click', startGame);
+
+      document.getElementById('btn-submit')
+        .addEventListener('click', checkAnswer);
+
+      document.getElementById('btn-play-again')
+        .addEventListener('click', () => {
+          document.getElementById('start-high-score').textContent = state.highScore;
+          showScreen('screen-start');
+        });
+
+      /* Enter on the answer input */
+      document.getElementById('answer-input')
+        .addEventListener('keydown', e => {
+          if (e.key === 'Enter') checkAnswer();
+        });
+
+      /* Enter on the Start screen launches the game */
+      document.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        const startScreen = document.getElementById('screen-start');
+        if (!startScreen.classList.contains('hidden')) startGame();
+      });
+    });
+  </script>
+</body>
+</html>
