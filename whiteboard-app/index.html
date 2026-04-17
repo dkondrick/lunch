@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>Whiteboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="toolbar">
+    <!-- Tools -->
+    <button class="tool-btn active" data-tool="pen"    title="Pen (P)">&#9998;</button>
+    <button class="tool-btn"        data-tool="eraser" title="Eraser (E)">&#9003;</button>
+
+    <div class="sep"></div>
+
+    <!-- Color + stroke -->
+    <input type="color" id="color-picker" value="#000000" title="Stroke color">
+    <input type="range" id="stroke-width" min="1" max="64" value="4" title="Stroke width">
+    <span id="stroke-label">4px</span>
+
+    <div class="sep"></div>
+
+    <!-- Zoom -->
+    <button id="zoom-out"   title="Zoom out (-)">&#8722;</button>
+    <button id="zoom-reset" title="Reset zoom (0)">100%</button>
+    <button id="zoom-in"    title="Zoom in (+)">+</button>
+
+    <div class="sep"></div>
+
+    <!-- Overlay -->
+    <button id="overlay-toggle" title="Toggle overlay mode (O)">Overlay: OFF</button>
+    <button id="click-through"  title="Toggle click-through (C)" disabled>Click-Through</button>
+
+    <div class="sep"></div>
+
+    <!-- Import -->
+    <button id="import-image-btn"  title="Import image file">Import Image</button>
+    <button id="screenshot-btn"    title="Take screenshot">Screenshot</button>
+    <button id="import-json-btn"   title="Open saved whiteboard">Open&#8230;</button>
+
+    <div class="sep"></div>
+
+    <!-- Export -->
+    <button id="export-png-btn"  title="Export as PNG">PNG</button>
+    <button id="export-svg-btn"  title="Export as SVG">SVG</button>
+    <button id="export-pdf-btn"  title="Export as PDF">PDF</button>
+    <button id="export-json-btn" title="Save whiteboard">Save JSON</button>
+
+    <div class="sep"></div>
+
+    <button id="undo-btn"  title="Undo (Ctrl+Z)">&#8617;</button>
+    <button id="clear-btn" title="Clear all strokes">Clear</button>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div id="overlay-hint">Press Esc to stop click-through</div>
+
+  <script src="./node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
