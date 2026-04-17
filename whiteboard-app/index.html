@@ -2,8 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
   <title>Whiteboard</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -29,15 +27,9 @@
 
     <div class="sep"></div>
 
-    <!-- Overlay -->
-    <button id="overlay-toggle" title="Toggle overlay mode (O)">Overlay: OFF</button>
-    <button id="click-through"  title="Toggle click-through (C)" disabled>Click-Through</button>
-
-    <div class="sep"></div>
-
     <!-- Import -->
     <button id="import-image-btn"  title="Import image file">Import Image</button>
-    <button id="screenshot-btn"    title="Take screenshot">Screenshot</button>
+    <button id="screenshot-btn"    title="Capture screen (requires browser permission)">Screenshot</button>
     <button id="import-json-btn"   title="Open saved whiteboard">Open&#8230;</button>
 
     <div class="sep"></div>
@@ -54,11 +46,15 @@
     <button id="clear-btn" title="Clear all strokes">Clear</button>
   </div>
 
+  <!-- Hidden file inputs -->
+  <input type="file" id="file-image-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
+  <input type="file" id="file-json-input"  accept=".json" style="display:none">
+
   <div id="canvas-container">
     <canvas id="canvas"></canvas>
   </div>
 
-  <div id="overlay-hint">Press Esc to stop click-through</div>
+  <div id="toast"></div>
 
   <script src="./node_modules/jspdf/dist/jspdf.umd.min.js"></script>
   <script src="renderer.js"></script>

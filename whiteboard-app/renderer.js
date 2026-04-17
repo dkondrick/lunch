@@ -15,9 +15,6 @@ const state = {
   strokes:       [],
   currentStroke: null,
 
-  overlayMode:   false,
-  clickThrough:  false,
-
   bgImage:       null,
 };
 
@@ -103,7 +100,6 @@ function redrawBackground() {
 // ── Mouse events ──────────────────────────────────────────────────────────────
 
 canvas.addEventListener('mousedown', e => {
-  // Middle mouse or Alt+Left = pan
   if (e.button === 1 || (e.button === 0 && e.altKey)) {
     state.isPanning = true;
     state.panStart  = { x: e.clientX - state.panX, y: e.clientY - state.panY };
@@ -111,8 +107,8 @@ canvas.addEventListener('mousedown', e => {
     return;
   }
   if (e.button !== 0) return;
-  state.isDrawing    = true;
-  const pt           = screenToWorld(e.offsetX, e.offsetY);
+  state.isDrawing     = true;
+  const pt            = screenToWorld(e.offsetX, e.offsetY);
   state.currentStroke = {
     tool:      state.tool,
     color:     state.color,
@@ -151,6 +147,28 @@ function endDraw() {
   state.currentStroke = null;
 }
 
+// ── Touch support ─────────────────────────────────────────────────────────────
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const t    = e.touches[0];
+  const pt   = screenToWorld(t.clientX - rect.left, t.clientY - rect.top);
+  state.isDrawing     = true;
+  state.currentStroke = { tool: state.tool, color: state.color, lineWidth: state.lineWidth, points: [pt] };
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (!state.isDrawing) return;
+  const rect = canvas.getBoundingClientRect();
+  const t    = e.touches[0];
+  state.currentStroke.points.push(screenToWorld(t.clientX - rect.left, t.clientY - rect.top));
+  redraw();
+}, { passive: false });
+
+canvas.addEventListener('touchend', endDraw);
+
 // ── Zoom ──────────────────────────────────────────────────────────────────────
 
 canvas.addEventListener('wheel', e => {
@@ -165,12 +183,12 @@ canvas.addEventListener('wheel', e => {
 }, { passive: false });
 
 function setZoom(newZoom) {
-  const cx = canvas.width  / 2;
-  const cy = canvas.height / 2;
+  const cx     = canvas.width  / 2;
+  const cy     = canvas.height / 2;
   const factor = newZoom / state.zoom;
-  state.panX = cx - (cx - state.panX) * factor;
-  state.panY = cy - (cy - state.panY) * factor;
-  state.zoom = Math.max(0.05, Math.min(20, newZoom));
+  state.panX   = cx - (cx - state.panX) * factor;
+  state.panY   = cy - (cy - state.panY) * factor;
+  state.zoom   = Math.max(0.05, Math.min(20, newZoom));
   updateZoomLabel();
   redrawBackground();
   redraw();
@@ -180,8 +198,8 @@ function updateZoomLabel() {
   document.getElementById('zoom-reset').textContent = Math.round(state.zoom * 100) + '%';
 }
 
-document.getElementById('zoom-in').addEventListener('click', () => setZoom(state.zoom * 1.25));
-document.getElementById('zoom-out').addEventListener('click', () => setZoom(state.zoom / 1.25));
+document.getElementById('zoom-in').addEventListener('click',    () => setZoom(state.zoom * 1.25));
+document.getElementById('zoom-out').addEventListener('click',   () => setZoom(state.zoom / 1.25));
 document.getElementById('zoom-reset').addEventListener('click', () => setZoom(1));
 
 // ── Toolbar controls ──────────────────────────────────────────────────────────
@@ -206,7 +224,7 @@ strokeSlider.addEventListener('input', e => {
 });
 
 document.getElementById('clear-btn').addEventListener('click', () => {
-  state.strokes = [];
+  state.strokes       = [];
   state.currentStroke = null;
   redraw();
 });
@@ -218,9 +236,8 @@ document.getElementById('undo-btn').addEventListener('click', () => {
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 
-document.addEventListener('keydown', async e => {
+document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
-
   if (e.key === 'p' || e.key === 'P') {
     document.querySelector('[data-tool="pen"]').click();
   } else if (e.key === 'e' || e.key === 'E') {
@@ -231,53 +248,66 @@ document.addEventListener('keydown', async e => {
     setZoom(state.zoom / 1.25);
   } else if (e.key === '0') {
     setZoom(1);
-  } else if (e.key === 'o' || e.key === 'O') {
-    document.getElementById('overlay-toggle').click();
   } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
     state.strokes.pop();
     redraw();
-  } else if (e.key === 'Escape' && state.clickThrough) {
-    state.clickThrough = false;
-    await window.api.setClickThrough(false);
-    document.getElementById('click-through').classList.remove('active');
-    document.getElementById('overlay-hint').style.display = 'none';
   }
 });
 
-// ── Overlay mode ──────────────────────────────────────────────────────────────
+// ── Browser file helpers ──────────────────────────────────────────────────────
 
-document.getElementById('overlay-toggle').addEventListener('click', async () => {
-  state.overlayMode = !state.overlayMode;
-  await window.api.toggleOverlay(state.overlayMode);
+function pickImageFile() {
+  return new Promise(resolve => {
+    const input = document.getElementById('file-image-input');
+    input.onchange = e => {
+      const file = e.target.files[0];
+      if (!file) { resolve(null); return; }
+      const reader  = new FileReader();
+      reader.onload = ev => resolve(ev.target.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+      input.value = '';
+    };
+    input.click();
+  });
+}
 
-  const btn   = document.getElementById('overlay-toggle');
-  const ctBtn = document.getElementById('click-through');
+function pickJsonFile() {
+  return new Promise(resolve => {
+    const input = document.getElementById('file-json-input');
+    input.onchange = e => {
+      const file = e.target.files[0];
+      if (!file) { resolve(null); return; }
+      const reader  = new FileReader();
+      reader.onload = ev => resolve(ev.target.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsText(file);
+      input.value = '';
+    };
+    input.click();
+  });
+}
 
-  if (state.overlayMode) {
-    btn.textContent = 'Overlay: ON';
-    btn.classList.add('active');
-    document.body.classList.add('overlay-mode');
-    ctBtn.disabled = false;
-  } else {
-    btn.textContent = 'Overlay: OFF';
-    btn.classList.remove('active');
-    document.body.classList.remove('overlay-mode');
-    if (state.clickThrough) {
-      state.clickThrough = false;
-      await window.api.setClickThrough(false);
-      ctBtn.classList.remove('active');
-      document.getElementById('overlay-hint').style.display = 'none';
-    }
-    ctBtn.disabled = true;
-  }
-});
+function downloadBlob(content, filename, mimeType) {
+  const blob = typeof content === 'string'
+    ? new Blob([content], { type: mimeType })
+    : content;
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
-document.getElementById('click-through').addEventListener('click', async () => {
-  state.clickThrough = !state.clickThrough;
-  await window.api.setClickThrough(state.clickThrough);
-  document.getElementById('click-through').classList.toggle('active', state.clickThrough);
-  document.getElementById('overlay-hint').style.display = state.clickThrough ? 'block' : 'none';
-});
+function dataURLtoBlob(dataURL) {
+  const [header, data] = dataURL.split(',');
+  const mime  = header.match(/:(.*?);/)[1];
+  const bytes = atob(data);
+  const arr   = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
 
 // ── Image import ──────────────────────────────────────────────────────────────
 
@@ -285,12 +315,12 @@ function loadBackgroundImage(dataURL) {
   const img  = new Image();
   img.onload = () => {
     state.bgImage = img;
-    const scaleX = bgCanvas.width  / img.width;
-    const scaleY = bgCanvas.height / img.height;
-    const scale  = Math.min(scaleX, scaleY);
-    state.zoom   = scale;
-    state.panX   = (bgCanvas.width  - img.width  * scale) / 2;
-    state.panY   = (bgCanvas.height - img.height * scale) / 2;
+    const scaleX  = bgCanvas.width  / img.width;
+    const scaleY  = bgCanvas.height / img.height;
+    const scale   = Math.min(scaleX, scaleY);
+    state.zoom    = scale;
+    state.panX    = (bgCanvas.width  - img.width  * scale) / 2;
+    state.panY    = (bgCanvas.height - img.height * scale) / 2;
     updateZoomLabel();
     redrawBackground();
     redraw();
@@ -299,23 +329,41 @@ function loadBackgroundImage(dataURL) {
 }
 
 document.getElementById('import-image-btn').addEventListener('click', async () => {
-  const dataURL = await window.api.importImage();
+  const dataURL = await pickImageFile();
   if (dataURL) loadBackgroundImage(dataURL);
 });
 
+// Screenshot via getDisplayMedia — requires HTTPS or localhost
 document.getElementById('screenshot-btn').addEventListener('click', async () => {
-  const dataURL = await window.api.screenshot();
-  if (dataURL) loadBackgroundImage(dataURL);
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    showToast('Screenshot requires HTTPS or localhost — open via a local server');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    const video  = document.createElement('video');
+    video.srcObject = stream;
+    await video.play();
+
+    const tmp  = document.createElement('canvas');
+    tmp.width  = video.videoWidth;
+    tmp.height = video.videoHeight;
+    tmp.getContext('2d').drawImage(video, 0, 0);
+    stream.getTracks().forEach(t => t.stop());
+
+    loadBackgroundImage(tmp.toDataURL('image/png'));
+  } catch (err) {
+    if (err.name !== 'NotAllowedError') showToast('Screenshot failed: ' + err.message);
+  }
 });
 
-// ── Composite helper (bg + strokes) ──────────────────────────────────────────
+// ── Composite helper ──────────────────────────────────────────────────────────
 
 function buildCompositeCanvas() {
   const ec   = document.createElement('canvas');
   ec.width   = canvas.width;
   ec.height  = canvas.height;
   const ectx = ec.getContext('2d');
-  // White background so PNG isn't transparent by default
   ectx.fillStyle = '#ffffff';
   ectx.fillRect(0, 0, ec.width, ec.height);
   if (state.bgImage) ectx.drawImage(bgCanvas, 0, 0);
@@ -325,10 +373,9 @@ function buildCompositeCanvas() {
 
 // ── PNG export ────────────────────────────────────────────────────────────────
 
-document.getElementById('export-png-btn').addEventListener('click', async () => {
-  const dataURL = buildCompositeCanvas().toDataURL('image/png');
-  const res = await window.api.exportPng(dataURL);
-  if (res.ok) showToast('Saved: ' + res.filePath);
+document.getElementById('export-png-btn').addEventListener('click', () => {
+  downloadBlob(dataURLtoBlob(buildCompositeCanvas().toDataURL('image/png')), 'whiteboard.png', 'image/png');
+  showToast('Downloaded whiteboard.png');
 });
 
 // ── SVG export ────────────────────────────────────────────────────────────────
@@ -351,8 +398,7 @@ function buildSVG() {
     const pts = stroke.points
       .map(p => `${(p.x * state.zoom + state.panX).toFixed(2)},${(p.y * state.zoom + state.panY).toFixed(2)}`)
       .join(' ');
-    const blendAttr = stroke.tool === 'eraser'
-      ? ' style="mix-blend-mode:destination-out"' : '';
+    const blendAttr = stroke.tool === 'eraser' ? ' style="mix-blend-mode:destination-out"' : '';
     lines.push(
       `  <polyline points="${pts}" stroke="${stroke.color}" ` +
       `stroke-width="${(stroke.lineWidth * state.zoom).toFixed(2)}" ` +
@@ -364,28 +410,26 @@ function buildSVG() {
   return lines.join('\n');
 }
 
-document.getElementById('export-svg-btn').addEventListener('click', async () => {
-  const res = await window.api.exportSvg(buildSVG());
-  if (res.ok) showToast('Saved: ' + res.filePath);
+document.getElementById('export-svg-btn').addEventListener('click', () => {
+  downloadBlob(buildSVG(), 'whiteboard.svg', 'image/svg+xml');
+  showToast('Downloaded whiteboard.svg');
 });
 
 // ── PDF export ────────────────────────────────────────────────────────────────
 
-document.getElementById('export-pdf-btn').addEventListener('click', async () => {
+document.getElementById('export-pdf-btn').addEventListener('click', () => {
   const { jsPDF } = window.jspdf;
-  const w = canvas.width;
-  const h = canvas.height;
-  const orientation = w >= h ? 'landscape' : 'portrait';
-  const doc  = new jsPDF({ orientation, unit: 'px', format: [w, h] });
-  const data = buildCompositeCanvas().toDataURL('image/png');
-  doc.addImage(data, 'PNG', 0, 0, w, h);
-  const res = await window.api.exportPdf(doc.output('datauristring'));
-  if (res.ok) showToast('Saved: ' + res.filePath);
+  const w   = canvas.width;
+  const h   = canvas.height;
+  const doc = new jsPDF({ orientation: w >= h ? 'landscape' : 'portrait', unit: 'px', format: [w, h] });
+  doc.addImage(buildCompositeCanvas().toDataURL('image/png'), 'PNG', 0, 0, w, h);
+  doc.save('whiteboard.pdf');
+  showToast('Downloaded whiteboard.pdf');
 });
 
 // ── JSON export / import ──────────────────────────────────────────────────────
 
-document.getElementById('export-json-btn').addEventListener('click', async () => {
+document.getElementById('export-json-btn').addEventListener('click', () => {
   let bgDataURL = null;
   if (state.bgImage) {
     const tmp  = document.createElement('canvas');
@@ -395,47 +439,44 @@ document.getElementById('export-json-btn').addEventListener('click', async () =>
     bgDataURL  = tmp.toDataURL('image/png');
   }
   const payload = {
-    version:      1,
-    canvasW:      canvas.width,
-    canvasH:      canvas.height,
-    zoom:         state.zoom,
-    panX:         state.panX,
-    panY:         state.panY,
+    version:        1,
+    zoom:           state.zoom,
+    panX:           state.panX,
+    panY:           state.panY,
     bgImageDataURL: bgDataURL,
-    strokes:      state.strokes,
+    strokes:        state.strokes,
   };
-  const res = await window.api.exportJson(JSON.stringify(payload, null, 2));
-  if (res.ok) showToast('Saved: ' + res.filePath);
+  downloadBlob(JSON.stringify(payload, null, 2), 'whiteboard.json', 'application/json');
+  showToast('Downloaded whiteboard.json');
 });
 
 document.getElementById('import-json-btn').addEventListener('click', async () => {
-  const text = await window.api.importJson();
+  const text = await pickJsonFile();
   if (!text) return;
-  const payload    = JSON.parse(text);
-  state.strokes    = payload.strokes || [];
-  state.zoom       = payload.zoom    ?? 1;
-  state.panX       = payload.panX    ?? 0;
-  state.panY       = payload.panY    ?? 0;
-  updateZoomLabel();
+  try {
+    const payload    = JSON.parse(text);
+    state.strokes    = payload.strokes || [];
+    state.zoom       = payload.zoom    ?? 1;
+    state.panX       = payload.panX    ?? 0;
+    state.panY       = payload.panY    ?? 0;
+    updateZoomLabel();
 
-  if (payload.bgImageDataURL) {
-    loadBackgroundImage(payload.bgImageDataURL);
-  } else {
-    state.bgImage = null;
-    bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
-    redraw();
+    if (payload.bgImageDataURL) {
+      loadBackgroundImage(payload.bgImageDataURL);
+    } else {
+      state.bgImage = null;
+      bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+      redraw();
+    }
+  } catch (err) {
+    showToast('Failed to load: ' + err.message);
   }
 });
 
-// ── Toast notification ────────────────────────────────────────────────────────
+// ── Toast ─────────────────────────────────────────────────────────────────────
 
 function showToast(msg) {
-  let toast = document.getElementById('toast');
-  if (!toast) {
-    toast    = document.createElement('div');
-    toast.id = 'toast';
-    document.body.appendChild(toast);
-  }
+  const toast       = document.getElementById('toast');
   toast.textContent = msg;
   toast.classList.add('show');
   clearTimeout(toast._timer);
