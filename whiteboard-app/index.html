@@ -6,57 +6,93 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
+<!-- ── Start screen ──────────────────────────────────────────────────────── -->
+<div id="start-screen">
+  <div class="start-inner">
+    <h1 class="start-title">Whiteboard</h1>
+    <div class="mode-cards">
+      <button class="mode-card" id="mode-whiteboard">
+        <span class="card-icon">&#9998;</span>
+        <span class="card-title">Blank Whiteboard</span>
+        <span class="card-desc">Draw freely on a blank canvas</span>
+      </button>
+      <button class="mode-card" id="mode-pdf">
+        <span class="card-icon">&#128196;</span>
+        <span class="card-title">Ink a PDF</span>
+        <span class="card-desc">Load a PDF and annotate it page by page</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── App ───────────────────────────────────────────────────────────────── -->
+<div id="app">
   <div id="toolbar">
     <!-- Tools -->
     <button class="tool-btn active" data-tool="pen"    title="Pen (P)">&#9998;</button>
     <button class="tool-btn"        data-tool="eraser" title="Eraser (E)">&#9003;</button>
-
     <div class="sep"></div>
 
     <!-- Color + stroke -->
     <input type="color" id="color-picker" value="#000000" title="Stroke color">
     <input type="range" id="stroke-width" min="1" max="64" value="4" title="Stroke width">
     <span id="stroke-label">4px</span>
-
     <div class="sep"></div>
 
     <!-- Zoom -->
     <button id="zoom-out"   title="Zoom out (-)">&#8722;</button>
     <button id="zoom-reset" title="Reset zoom (0)">100%</button>
     <button id="zoom-in"    title="Zoom in (+)">+</button>
-
     <div class="sep"></div>
 
-    <!-- Import -->
-    <button id="import-image-btn"  title="Import image file">Import Image</button>
-    <button id="screenshot-btn"    title="Capture screen (requires browser permission)">Screenshot</button>
-    <button id="import-json-btn"   title="Open saved whiteboard">Open&#8230;</button>
+    <!-- Whiteboard-only imports -->
+    <span id="wb-import-controls">
+      <button id="import-image-btn" title="Import image file">Import Image</button>
+      <button id="screenshot-btn"   title="Capture screen">Screenshot</button>
+      <div class="sep"></div>
+    </span>
 
+    <!-- PDF-only controls (hidden in whiteboard mode) -->
+    <span id="pdf-controls">
+      <button id="pdf-load-btn" title="Load a PDF file">Load PDF</button>
+      <div class="sep"></div>
+      <button id="pdf-prev-btn" title="Previous page (&#8592;)" disabled>&#8592;</button>
+      <span id="pdf-page-label">&#8212; / &#8212;</span>
+      <button id="pdf-next-btn" title="Next page (&#8594;)" disabled>&#8594;</button>
+      <div class="sep"></div>
+    </span>
+
+    <!-- Open / Export -->
+    <button id="import-json-btn"           title="Open saved session">Open&#8230;</button>
     <div class="sep"></div>
-
-    <!-- Export -->
-    <button id="export-png-btn"  title="Export as PNG">PNG</button>
-    <button id="export-svg-btn"  title="Export as SVG">SVG</button>
-    <button id="export-pdf-btn"  title="Export as PDF">PDF</button>
-    <button id="export-json-btn" title="Save whiteboard">Save JSON</button>
-
+    <button id="export-png-btn"            title="Export as PNG">PNG</button>
+    <button id="export-svg-btn"            title="Export as SVG">SVG</button>
+    <button id="export-wb-pdf-btn"         title="Export current view as PDF">PDF</button>
+    <button id="export-annotated-pdf-btn"  title="Export all pages as annotated PDF">PDF&#9733;</button>
+    <button id="export-json-btn"           title="Save session">Save JSON</button>
     <div class="sep"></div>
 
     <button id="undo-btn"  title="Undo (Ctrl+Z)">&#8617;</button>
-    <button id="clear-btn" title="Clear all strokes">Clear</button>
+    <button id="clear-btn" title="Clear strokes on this page">Clear</button>
+    <div class="sep"></div>
+    <button id="back-btn"  title="Back to start screen">&#8962;</button>
   </div>
 
   <!-- Hidden file inputs -->
   <input type="file" id="file-image-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
-  <input type="file" id="file-json-input"  accept=".json" style="display:none">
+  <input type="file" id="file-json-input"  accept=".json"                                     style="display:none">
+  <input type="file" id="file-pdf-input"   accept=".pdf"                                      style="display:none">
 
   <div id="canvas-container">
     <canvas id="canvas"></canvas>
   </div>
+</div>
 
-  <div id="toast"></div>
+<div id="toast"></div>
 
-  <script src="./node_modules/jspdf/dist/jspdf.umd.min.js"></script>
-  <script src="renderer.js"></script>
+<script src="./node_modules/pdfjs-dist/build/pdf.min.js"></script>
+<script src="./node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+<script src="renderer.js"></script>
 </body>
 </html>
