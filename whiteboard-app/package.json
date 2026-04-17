@@ -1,0 +1,14 @@
+{
+  "name": "whiteboard-app",
+  "version": "1.0.0",
+  "description": "Local browser whiteboard — draw, annotate screenshots, export",
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "jspdf": "^2.5.1"
+  }
+}
