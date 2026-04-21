@@ -36,6 +36,7 @@ const state = {
   currentPage:   1,
   totalPages:    0,
   pdfStrokes:    {},           // { pageNum: stroke[] }
+  pdfRenderScale: 1,           // scale used when rasterising the current page
 };
 
 // ── Canvas setup ──────────────────────────────────────────────────────────────
@@ -99,11 +100,12 @@ document.getElementById('back-btn').addEventListener('click', () => {
 function resetState() {
   state.strokes       = [];
   state.currentStroke = null;
-  state.pdfDoc        = null;
-  state.currentPage   = 1;
-  state.totalPages    = 0;
-  state.pdfStrokes    = {};
-  state.bgImage       = null;
+  state.pdfDoc         = null;
+  state.currentPage    = 1;
+  state.totalPages     = 0;
+  state.pdfStrokes     = {};
+  state.pdfRenderScale = 1;
+  state.bgImage        = null;
   state.zoom          = 1;
   state.panX          = 0;
   state.panY          = 0;
@@ -181,7 +183,8 @@ function redrawBackground() {
   if (!state.bgImage) return;
   bgCtx.save();
   applyTransform(bgCtx);
-  bgCtx.drawImage(state.bgImage, 0, 0);
+  const rs = state.pdfRenderScale;
+  bgCtx.drawImage(state.bgImage, 0, 0, state.bgImage.width / rs, state.bgImage.height / rs);
   bgCtx.restore();
 }
 
@@ -402,11 +405,14 @@ function dataURLtoBlob(dataURL) {
 function loadBackgroundImage(dataURL) {
   const img  = new Image();
   img.onload = () => {
-    state.bgImage = img;
-    const scale   = Math.min(bgCanvas.width / img.width, bgCanvas.height / img.height);
-    state.zoom    = scale;
-    state.panX    = (bgCanvas.width  - img.width  * scale) / 2;
-    state.panY    = (bgCanvas.height - img.height * scale) / 2;
+    state.bgImage  = img;
+    const rs       = state.pdfRenderScale;
+    const logicalW = img.width  / rs;
+    const logicalH = img.height / rs;
+    const scale    = Math.min(bgCanvas.width / logicalW, bgCanvas.height / logicalH);
+    state.zoom     = scale;
+    state.panX     = (bgCanvas.width  - logicalW * scale) / 2;
+    state.panY     = (bgCanvas.height - logicalH * scale) / 2;
     updateZoomLabel();
     redrawBackground();
     redraw();
@@ -416,7 +422,10 @@ function loadBackgroundImage(dataURL) {
 
 document.getElementById('import-image-btn').addEventListener('click', async () => {
   const file = await pickFile('file-image-input');
-  if (file) loadBackgroundImage(await readAsDataURL(file));
+  if (file) {
+    state.pdfRenderScale = 1;
+    loadBackgroundImage(await readAsDataURL(file));
+  }
 });
 
 document.getElementById('screenshot-btn').addEventListener('click', async () => {
@@ -433,6 +442,7 @@ document.getElementById('screenshot-btn').addEventListener('click', async () => 
     tmp.width = video.videoWidth; tmp.height = video.videoHeight;
     tmp.getContext('2d').drawImage(video, 0, 0);
     stream.getTracks().forEach(t => t.stop());
+    state.pdfRenderScale = 1;
     loadBackgroundImage(tmp.toDataURL('image/png'));
   } catch (err) {
     if (err.name !== 'NotAllowedError') showToast('Screenshot failed: ' + err.message);
@@ -473,14 +483,16 @@ async function loadPDF(file) {
 
 async function renderPdfPage(pageNum) {
   if (!state.pdfDoc) return;
-  const page     = await state.pdfDoc.getPage(pageNum);
-  const viewport = page.getViewport({ scale: 1 });
+  const page         = await state.pdfDoc.getPage(pageNum);
+  const RENDER_SCALE = 3; // 3× gives sharp detail up to ~3× zoom
+  const viewport     = page.getViewport({ scale: RENDER_SCALE });
 
   const offscreen = document.createElement('canvas');
   offscreen.width  = Math.round(viewport.width);
   offscreen.height = Math.round(viewport.height);
   await page.render({ canvasContext: offscreen.getContext('2d'), viewport }).promise;
 
+  state.pdfRenderScale = RENDER_SCALE;
   loadBackgroundImage(offscreen.toDataURL('image/png'));
 }
 
